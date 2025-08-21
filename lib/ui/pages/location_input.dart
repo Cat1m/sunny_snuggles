@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sunny_snuggles/features/weather/viewmodel/weather_provider.dart';
@@ -7,8 +8,11 @@ class LocationInput extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final loc = ref.watch(locationProvider);
-    final controller = TextEditingController(text: loc);
+    final controller = TextEditingController();
+    final loc = ref.watch(locationProvider); // Lấy giá trị location từ provider
+
+    // Cập nhật controller text từ locationProvider
+    controller.text = loc;
 
     return Container(
       decoration: BoxDecoration(
@@ -31,7 +35,21 @@ class LocationInput extends ConsumerWidget {
           suffixIcon: IconButton(
             icon: const Icon(Icons.my_location),
             onPressed: () {
-              // Get current location logic
+              // Random lat, lon tạm thời
+              final random = Random();
+              final lat =
+                  10 +
+                  random.nextDouble() *
+                      5; // Random latitude trong phạm vi (10 - 15)
+              final lon =
+                  106 +
+                  random.nextDouble() *
+                      5; // Random longitude trong phạm vi (106 - 111)
+              final randomLatLon = '$lat,$lon';
+
+              // Cập nhật vào locationProvider
+              ref.read(locationProvider.notifier).state = randomLatLon;
+              ref.refresh(weatherBundleCurrentProvider);
             },
           ),
           border: OutlineInputBorder(
@@ -48,8 +66,9 @@ class LocationInput extends ConsumerWidget {
         onSubmitted: (val) {
           final v = val.trim();
           if (v.isNotEmpty) {
-            ref.read(locationProvider.notifier).state = v;
-            ref.refresh(weatherBundleProvider);
+            ref.read(locationProvider.notifier).state =
+                v; // Cập nhật giá trị locationProvider
+            ref.refresh(weatherBundleCurrentProvider);
           }
         },
       ),

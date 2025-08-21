@@ -17,7 +17,7 @@ class HomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncWeather = ref.watch(weatherBundleProvider);
+    final asyncWeather = ref.watch(weatherBundleCurrentProvider);
     final streak = ref.watch(streakNotifierProvider);
 
     return Scaffold(
@@ -130,7 +130,7 @@ class HomePage extends ConsumerWidget {
               LocationInput(),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: () => ref.refresh(weatherBundleProvider),
+                onPressed: () => ref.refresh(weatherBundleCurrentProvider),
                 icon: const Icon(Icons.refresh),
                 label: const Text('Try Again'),
                 style: ElevatedButton.styleFrom(
@@ -351,7 +351,7 @@ class _FloatingLocationCard extends ConsumerWidget {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              ref.refresh(weatherBundleProvider);
+              ref.refresh(weatherBundleCurrentProvider);
             },
             child: const Text('Update'),
           ),

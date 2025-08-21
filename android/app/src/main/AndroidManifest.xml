@@ -1,6 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
+    
+    <!-- internet-->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- tọa độ-->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    
     <application
         android:label="sunny_snuggles"
         android:name="${applicationName}"

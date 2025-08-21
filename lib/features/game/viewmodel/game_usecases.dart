@@ -10,7 +10,7 @@ import '../../../core/storage/prefs_service.dart';
 /// Lưu đoán cho NGÀY MAI theo bundle & quizState hiện tại, dùng locationKey chuẩn hoá
 final saveGuessForTomorrowProvider = FutureProvider<void>((ref) async {
   final game = await ref.watch(gameServiceProvider.future);
-  final bundle = await ref.watch(weatherBundleProvider.future);
+  final bundle = await ref.watch(weatherBundleCurrentProvider.future);
   final qs = ref.read(quizStateProvider);
 
   if (!qs.isComplete) {
@@ -32,7 +32,7 @@ final saveGuessForTomorrowProvider = FutureProvider<void>((ref) async {
 /// Trả về: true = đúng toàn bộ, false = sai, null = không hành động.
 final revealTodayResultProvider = FutureProvider<bool?>((ref) async {
   final game = await ref.watch(gameServiceProvider.future);
-  final bundle = await ref.watch(weatherBundleProvider.future);
+  final bundle = await ref.watch(weatherBundleCurrentProvider.future);
   final prefs = await ref.watch(prefsServiceProvider.future);
 
   final locationKey = locationKeyFromBundle(bundle);
