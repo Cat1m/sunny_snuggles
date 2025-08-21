@@ -9,8 +9,7 @@ void main() {
   // Cảnh báo sớm nếu chưa truyền API key
   assert(
     Env.weatherApiKey.isNotEmpty,
-    'Bạn chưa truyền WEATHER_API_KEY. Hãy chạy:\n'
-    'flutter run --dart-define=WEATHER_API_KEY=your_key',
+    'Bạn chưa cấu hình WEATHER_API_KEY trong .env',
   );
 
   runApp(const ProviderScope(child: SunnySnugglesApp()));
