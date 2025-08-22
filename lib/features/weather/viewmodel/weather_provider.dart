@@ -2,6 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../repository/weather_repository.dart';
 import '../../weather/model/weather_bundle.dart';
 
+/// NEW: trạng thái bận khi làm mới
+final isRefreshingProvider = StateProvider.autoDispose<bool>((ref) => false);
+
 /// Repository (giữ nguyên)
 final weatherRepositoryProvider = Provider<WeatherRepository>((ref) {
   final repo = WeatherRepository();

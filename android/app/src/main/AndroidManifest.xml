@@ -9,7 +9,7 @@
 
     
     <application
-        android:label="sunny_snuggles"
+        android:label="Sunny Snuggles"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

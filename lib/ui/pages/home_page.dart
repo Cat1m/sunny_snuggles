@@ -1,16 +1,26 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sunny_snuggles/features/game/model/quiz_enums.dart';
-import 'package:sunny_snuggles/features/game/viewmodel/game_usecases.dart';
-import 'package:sunny_snuggles/features/game/viewmodel/quiz_state.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 import 'package:sunny_snuggles/features/game/viewmodel/streak_provider.dart';
 import 'package:sunny_snuggles/features/weather/model/weather_bundle.dart';
 import 'package:sunny_snuggles/features/weather/viewmodel/weather_provider.dart';
-import 'package:sunny_snuggles/ui/pages/action_buttons_row.dart';
-import 'package:sunny_snuggles/ui/pages/cute_quiz_section.dart';
-import 'package:sunny_snuggles/ui/pages/tomorrow_preview_card.dart';
+import 'package:sunny_snuggles/ui/pages/cute_header.dart';
+import 'package:sunny_snuggles/ui/pages/detail_screen.dart';
 import 'package:sunny_snuggles/ui/pages/location_input.dart';
 import 'package:sunny_snuggles/ui/pages/theme/weather_color_palette.dart';
+import 'package:sunny_snuggles/ui/pages/tomorrow_screen.dart';
+
+// ⚠️ ĐÃ GỠ import thừa:
+// - action_buttons_row.dart
+// - cute_quiz_section.dart
+// - floating_location_card.dart
+// - tomorrow_preview_card.dart
+// - game_usecases.dart
+// - quiz_state.dart
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -36,28 +46,83 @@ class HomePage extends ConsumerWidget {
     int streak,
   ) {
     final condition = _getWeatherCondition(bundle.current.conditionText);
+    final busy = ref.watch(isRefreshingProvider); // <-- đọc trạng thái bận
+
+    Future<void> doRefresh() async {
+      if (ref.read(isRefreshingProvider)) return;
+      ref.read(isRefreshingProvider.notifier).state = true;
+      try {
+        await ref.refresh(weatherBundleCurrentProvider.future);
+        // (tuỳ chọn) HapticFeedback.mediumImpact();
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Làm mới thất bại, thử lại nhé!')),
+          );
+        }
+      } finally {
+        ref.read(isRefreshingProvider.notifier).state = false;
+      }
+    }
 
     return Container(
       decoration: BoxDecoration(
         gradient: WeatherColorPalette.getGradient(condition),
       ),
       child: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            children: [
-              _CuteHeader(streak: streak, condition: condition),
-              const SizedBox(height: 20),
-              _FloatingLocationCard(bundle: bundle),
-              const SizedBox(height: 24),
-              _MainWeatherCard(bundle: bundle),
-              const SizedBox(height: 16),
-              TomorrowPreviewCard(bundle: bundle),
-              const SizedBox(height: 24),
-              CuteQuizSection(),
-              const SizedBox(height: 20),
-              ActionButtonsRow(),
-              const SizedBox(height: 40),
+        child: RefreshIndicator(
+          onRefresh: doRefresh,
+          edgeOffset: 12,
+          displacement: 36,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(), // cho cảm giác mượt
+            ),
+            slivers: [
+              // Header
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 8),
+                    _FadeSlideIn(
+                      delayMs: 40,
+                      child: CuteHeader(streak: streak, condition: condition),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Phần còn lại fill toàn màn hình (để nội dung ngắn vẫn “kéo” được)
+              SliverFillRemaining(
+                hasScrollBody: false, // rất quan trọng để cột “dãn” tới đáy
+                child: Column(
+                  children: [
+                    // Bubble giữa màn
+                    Expanded(
+                      child: Center(
+                        child: _TempBubble(
+                          temperature: bundle.current.tempC.toInt(),
+                          busy: busy,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => DetailScreen(bundle: bundle),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+                    // Bottom actions (animate)
+                    _FadeSlideIn(
+                      delayMs: 120,
+                      child: _BottomActions(bundle: bundle),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -127,7 +192,7 @@ class HomePage extends ConsumerWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
-              LocationInput(),
+              const LocationInput(),
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () => ref.refresh(weatherBundleCurrentProvider),
@@ -147,13 +212,21 @@ class HomePage extends ConsumerWidget {
 
   WeatherCondition _getWeatherCondition(String conditionText) {
     final text = conditionText.toLowerCase();
-    if (text.contains('rain') || text.contains('drizzle')) {
+    if (text.contains('rain') ||
+        text.contains('drizzle') ||
+        text.contains('shower')) {
       return WeatherCondition.rainy;
-    } else if (text.contains('cloud') || text.contains('overcast')) {
+    } else if (text.contains('cloud') ||
+        text.contains('overcast') ||
+        text.contains('partly')) {
       return WeatherCondition.cloudy;
-    } else if (text.contains('snow')) {
+    } else if (text.contains('snow') ||
+        text.contains('sleet') ||
+        text.contains('blizzard')) {
       return WeatherCondition.snowy;
-    } else if (text.contains('storm') || text.contains('thunder')) {
+    } else if (text.contains('storm') ||
+        text.contains('thunder') ||
+        text.contains('lightning')) {
       return WeatherCondition.stormy;
     } else {
       return WeatherCondition.sunny;
@@ -161,351 +234,366 @@ class HomePage extends ConsumerWidget {
   }
 }
 
-class _CuteHeader extends StatelessWidget {
-  const _CuteHeader({required this.streak, required this.condition});
+class _FadeSlideIn extends StatefulWidget {
+  const _FadeSlideIn({required this.child, this.delayMs = 0});
+  final Widget child;
+  final int delayMs;
 
-  final int streak;
-  final WeatherCondition condition;
+  @override
+  State<_FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<_FadeSlideIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ac;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ac = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+    );
+    _fade = CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
+
+    Future.delayed(Duration(milliseconds: widget.delayMs), () {
+      if (mounted) _ac.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ac.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              _getWeatherEmoji(condition),
-              style: const TextStyle(fontSize: 32),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Sunny Snuggles',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black26,
-                        offset: Offset(0, 1),
-                        blurRadius: 3,
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  'Your weather buddy! 🤗',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.9),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _StreakBadge(streak: streak),
-        ],
-      ),
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
+}
 
-  String _getWeatherEmoji(WeatherCondition condition) {
-    switch (condition) {
-      case WeatherCondition.sunny:
-        return '☀️';
-      case WeatherCondition.cloudy:
-        return '☁️';
-      case WeatherCondition.rainy:
-        return '🌧️';
-      case WeatherCondition.snowy:
-        return '❄️';
-      case WeatherCondition.stormy:
-        return '⛈️';
+class _BottomActions extends ConsumerStatefulWidget {
+  const _BottomActions({required this.bundle});
+  final WeatherBundle bundle;
+
+  @override
+  ConsumerState<_BottomActions> createState() => _BottomActionsState();
+}
+
+class _BottomActionsState extends ConsumerState<_BottomActions>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ac;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ac = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
+
+    // delay nhẹ cho mượt
+    Future.microtask(() => _ac.forward());
+  }
+
+  @override
+  void dispose() {
+    _ac.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final isRefreshing = ref.read(isRefreshingProvider);
+    if (isRefreshing) return;
+
+    HapticFeedback.selectionClick();
+    ref.read(isRefreshingProvider.notifier).state = true;
+    try {
+      // Cách 2 (tùy chọn): invalidate rồi chờ đọc lại
+      ref.invalidate(weatherBundleCurrentProvider);
+      await ref.read(weatherBundleCurrentProvider.future);
+    } catch (_) {
+      // có thể show SnackBar nếu cần
+    } finally {
+      if (mounted) {
+        ref.read(isRefreshingProvider.notifier).state = false;
+      }
     }
   }
-}
 
-class _StreakBadge extends StatelessWidget {
-  const _StreakBadge({required this.streak});
-  final int streak;
+  void _goTomorrow() {
+    HapticFeedback.lightImpact();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => TomorrowScreen(bundle: widget.bundle)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFF6B35), Color(0xFFFF8E53)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.orange.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.local_fire_department,
-            color: Colors.white,
-            size: 20,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '$streak',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    final busy = ref.watch(isRefreshingProvider);
 
-class _FloatingLocationCard extends ConsumerWidget {
-  const _FloatingLocationCard({required this.bundle});
-  final WeatherBundle bundle;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          Row(
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      child: AnimatedOpacity(
+        opacity: 1,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOut,
+        child: SlideTransition(
+          position: _slide,
+          child: Row(
             children: [
-              Icon(
-                Icons.location_on,
-                color: Colors.white.withOpacity(0.8),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  '${bundle.current.locationName}, ${bundle.current.country}',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
+                child: FilledButton.icon(
+                  onPressed: busy ? null : _refresh,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: Text(busy ? 'Đang làm mới...' : 'Làm mới'),
                 ),
               ),
-              IconButton(
-                onPressed: () => _showLocationDialog(context, ref),
-                icon: Icon(
-                  Icons.edit,
-                  color: Colors.white.withOpacity(0.8),
-                  size: 20,
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : _goTomorrow,
+                  icon: const Icon(Icons.calendar_today),
+                  label: const Text('Hôm sau'),
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  void _showLocationDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Change Location'),
-        content: LocationInput(),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref.refresh(weatherBundleCurrentProvider);
-            },
-            child: const Text('Update'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MainWeatherCard extends StatelessWidget {
-  const _MainWeatherCard({required this.bundle});
-  final WeatherBundle bundle;
-
-  @override
-  Widget build(BuildContext context) {
-    final current = bundle.current;
-    final today = bundle.today;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '${current.tempC.toInt()}°',
-                style: const TextStyle(
-                  fontSize: 60,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF2C2C2C),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Column(
-                children: [
-                  Image.network(
-                    _fixIconUrl(current.conditionIcon),
-                    width: 64,
-                    height: 64,
-                  ),
-                  Text(
-                    current.conditionText,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _WeatherStats(current: current, today: today),
-        ],
-      ),
-    );
-  }
-
-  String _fixIconUrl(String icon) =>
-      icon.startsWith('//') ? 'https:$icon' : icon;
-}
-
-class _WeatherStats extends StatelessWidget {
-  const _WeatherStats({required this.current, required this.today});
-
-  final current;
-  final today;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        _StatItem(
-          icon: Icons.thermostat,
-          label: 'High/Low',
-          value: '${today.maxTempC.toInt()}°/${today.minTempC.toInt()}°',
-          color: const Color(0xFFFF6B35),
         ),
-        _StatItem(
-          icon: Icons.air,
-          label: 'Wind',
-          value: '${current.windKph.toInt()} km/h',
-          color: const Color(0xFF42A5F5),
-        ),
-        if (current.uv != null)
-          _StatItem(
-            icon: Icons.wb_sunny,
-            label: 'UV Index',
-            value: current.uv!.toInt().toString(),
-            color: const Color(0xFFFFA726),
-          ),
-      ],
+      ),
     );
   }
 }
 
-class _StatItem extends StatelessWidget {
-  const _StatItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
+/// Bubble nhiệt độ lớn (tối giản – chưa animation, sẽ nâng ở Bước 2)
+// Bubble nhiệt độ phiên bản Pro
+class _TempBubble extends StatefulWidget {
+  const _TempBubble({
+    required this.temperature,
+    required this.onTap,
+    this.busy = false,
   });
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
+  final int temperature;
+  final VoidCallback onTap;
+  final bool busy;
+
+  @override
+  State<_TempBubble> createState() => _TempBubbleState();
+}
+
+class _TempBubbleState extends State<_TempBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _appear;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    )..forward();
+    _appear = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onTap() {
+    HapticFeedback.lightImpact();
+    widget.onTap();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
+    // Responsive: 44% cạnh ngắn, clamp 180–260
+    final shortest = MediaQuery.of(context).size.shortestSide;
+    final size =
+        shortest.clamp(180.0, 260.0) * 0.44 * (shortest >= 600 ? 1.4 : 1.0);
+    final baseColor = const Color(0xFF0F172A); // slate-900-ish (đậm, dễ đọc)
+
+    return Semantics(
+      label:
+          'Current temperature ${widget.temperature} degrees. Tap for details.',
+      button: true,
+      child: Hero(
+        tag: 'temp-bubble',
+        child: RepaintBoundary(
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            scale: _pressed ? 0.97 : 1.0,
+            child: ScaleTransition(
+              scale: _appear,
+              child: Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: widget.busy ? null : _onTap,
+                  onHighlightChanged: (v) => setState(() => _pressed = v),
+                  child: SizedBox(
+                    width: size,
+                    height: size,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Aura nhẹ phía ngoài để tạo chiều sâu
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.18),
+                                blurRadius: 32,
+                                spreadRadius: 2,
+                                offset: const Offset(0, 16),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Nền: radial -> trung tâm sáng, rìa ấm
+                        Container(
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              center: Alignment(-0.2, -0.25),
+                              radius: 0.95,
+                              colors: [
+                                Color(0xFFFFFFFF),
+                                Color(0xFFF3F7FF), // hơi xanh nhẹ
+                                Color(0xFFEFF4FF),
+                              ],
+                              stops: [0.2, 0.65, 1.0],
+                            ),
+                          ),
+                        ),
+                        // Viền gradient mảnh tăng “premium feel”
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              width: 2,
+                              // gradient stroke “fake” bằng shader mask
+                              color: Colors.transparent,
+                            ),
+                          ),
+                          foregroundDecoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: SweepGradient(
+                              startAngle: 0,
+                              endAngle: 3.1415 * 2,
+                              colors: const [
+                                Color(0xFFFFFFFF),
+                                Color(0xFFE2E8F0),
+                                Color(0xFFFFFFFF),
+                              ],
+                              stops: const [0.0, 0.55, 1.0],
+                            ),
+                          ),
+                        ),
+                        // Glare specular
+                        Align(
+                          alignment: const Alignment(-0.45, -0.55),
+                          child: Container(
+                            width: size * 0.55,
+                            height: size * 0.55,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  Colors.white.withOpacity(0.60),
+                                  Colors.white.withOpacity(0.0),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Nhiệt độ (display typeface, kerning âm)
+                        Center(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            transitionBuilder: (child, anim) => FadeTransition(
+                              opacity: anim,
+                              child: ScaleTransition(
+                                scale: Tween(
+                                  begin: 0.985,
+                                  end: 1.0,
+                                ).animate(anim),
+                                child: child,
+                              ),
+                            ),
+                            child: Text(
+                              '${widget.temperature}°',
+                              key: ValueKey(widget.temperature),
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                // Outfit: display đẹp, dễ đọc; có thể thử Inter Tight/Manrope
+                                fontSize: (size * 0.46).clamp(56.0, 110.0),
+                                fontWeight: FontWeight.w900,
+                                height: 0.95,
+                                letterSpacing: -1.5,
+                                color: baseColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Busy overlay (mờ + spinner)
+                        AnimatedOpacity(
+                          duration: const Duration(milliseconds: 160),
+                          opacity: widget.busy ? 1 : 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withOpacity(0.38),
+                            ),
+                            child: const Center(
+                              child: SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-          child: Icon(icon, color: color, size: 20),
         ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF2C2C2C),
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
