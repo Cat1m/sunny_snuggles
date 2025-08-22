@@ -388,6 +388,7 @@ class _BottomActionsState extends ConsumerState<_BottomActions>
 
 /// Bubble nhiệt độ lớn (tối giản – chưa animation, sẽ nâng ở Bước 2)
 // Bubble nhiệt độ phiên bản Pro
+// Bubble nhiệt độ – Pro v2
 class _TempBubble extends StatefulWidget {
   const _TempBubble({
     required this.temperature,
@@ -432,11 +433,21 @@ class _TempBubbleState extends State<_TempBubble>
 
   @override
   Widget build(BuildContext context) {
-    // Responsive: 44% cạnh ngắn, clamp 180–260
+    // —— KÍCH THƯỚC —— //
     final shortest = MediaQuery.of(context).size.shortestSide;
-    final size =
-        shortest.clamp(180.0, 260.0) * 0.44 * (shortest >= 600 ? 1.4 : 1.0);
-    final baseColor = const Color(0xFF0F172A); // slate-900-ish (đậm, dễ đọc)
+    // mặc định 60% cạnh ngắn, clamp 240–380 (tablet tự tăng nhẹ)
+    final base = shortest * 0.60;
+    final size = base.clamp(240.0, shortest >= 700 ? 420.0 : 380.0);
+
+    final rimSweep = const SweepGradient(
+      colors: [Color(0xFFFFFFFF), Color(0xFFE6ECF7), Color(0xFFFFFFFF)],
+      stops: [0.0, 0.55, 1.0],
+    );
+
+    // Gradient chữ dựa theo nhiệt độ
+    final textShader = _tempGradient(widget.temperature).createShader(
+      Rect.fromCircle(center: Offset(size / 2, size / 2), radius: size / 2),
+    );
 
     return Semantics(
       label:
@@ -465,78 +476,72 @@ class _TempBubbleState extends State<_TempBubble>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // Aura nhẹ phía ngoài để tạo chiều sâu
+                        // Aura / đổ bóng mềm tạo chiều sâu
                         Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.18),
-                                blurRadius: 32,
+                                color: Colors.black.withOpacity(0.20),
+                                blurRadius: size * 0.14,
                                 spreadRadius: 2,
-                                offset: const Offset(0, 16),
+                                offset: Offset(0, size * 0.05),
                               ),
                             ],
                           ),
                         ),
-                        // Nền: radial -> trung tâm sáng, rìa ấm
+
+                        // Nền radial 3 lớp – cảm giác “phồng”
                         Container(
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: RadialGradient(
-                              center: Alignment(-0.2, -0.25),
+                              center: Alignment(-0.18, -0.22),
                               radius: 0.95,
                               colors: [
                                 Color(0xFFFFFFFF),
-                                Color(0xFFF3F7FF), // hơi xanh nhẹ
-                                Color(0xFFEFF4FF),
+                                Color(0xFFF2F6FF),
+                                Color(0xFFEAF1FF),
                               ],
-                              stops: [0.2, 0.65, 1.0],
+                              stops: [0.18, 0.70, 1.0],
                             ),
                           ),
                         ),
-                        // Viền gradient mảnh tăng “premium feel”
+
+                        // Rim-light: viền sáng mảnh quanh mép
                         Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
                               width: 2,
-                              // gradient stroke “fake” bằng shader mask
                               color: Colors.transparent,
                             ),
                           ),
                           foregroundDecoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: SweepGradient(
-                              startAngle: 0,
-                              endAngle: 3.1415 * 2,
-                              colors: const [
-                                Color(0xFFFFFFFF),
-                                Color(0xFFE2E8F0),
-                                Color(0xFFFFFFFF),
-                              ],
-                              stops: const [0.0, 0.55, 1.0],
-                            ),
+                            gradient: rimSweep,
                           ),
                         ),
-                        // Glare specular
+
+                        // Highlight specular (vệt sáng góc trên trái)
                         Align(
-                          alignment: const Alignment(-0.45, -0.55),
+                          alignment: const Alignment(-0.46, -0.58),
                           child: Container(
-                            width: size * 0.55,
-                            height: size * 0.55,
+                            width: size * 0.58,
+                            height: size * 0.58,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  Colors.white.withOpacity(0.60),
+                                  Colors.white.withOpacity(0.58),
                                   Colors.white.withOpacity(0.0),
                                 ],
                               ),
                             ),
                           ),
                         ),
-                        // Nhiệt độ (display typeface, kerning âm)
+
+                        // NHIỆT ĐỘ – gradient theo temp + shadow nhẹ
                         Center(
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 220),
@@ -555,17 +560,25 @@ class _TempBubbleState extends State<_TempBubble>
                               key: ValueKey(widget.temperature),
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
-                                // Outfit: display đẹp, dễ đọc; có thể thử Inter Tight/Manrope
-                                fontSize: (size * 0.46).clamp(56.0, 110.0),
+                                fontSize: (size * 0.46).clamp(64.0, 132.0),
                                 fontWeight: FontWeight.w900,
                                 height: 0.95,
                                 letterSpacing: -1.5,
-                                color: baseColor,
+                                // dùng foreground để sơn gradient
+                                foreground: Paint()..shader = textShader,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ),
-                        // Busy overlay (mờ + spinner)
+
+                        // Overlay busy
                         AnimatedOpacity(
                           duration: const Duration(milliseconds: 160),
                           opacity: widget.busy ? 1 : 0,
@@ -594,6 +607,31 @@ class _TempBubbleState extends State<_TempBubble>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Gradient chữ theo nhiệt độ (°C)
+Gradient _tempGradient(int t) {
+  // map đơn giản: lạnh <=15 → xanh; mát 16–27 → xanh→vàng; nóng >=28 → cam→đỏ
+  if (t <= 15) {
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF0EA5E9), Color(0xFF22D3EE)], // cyan → sky
+    );
+  } else if (t <= 27) {
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF06B6D4), Color(0xFFF59E0B)], // teal → amber
+      stops: [0.0, 1.0],
+    );
+  } else {
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFFFF8A00), Color(0xFFFF3D3D)], // orange → red
     );
   }
 }

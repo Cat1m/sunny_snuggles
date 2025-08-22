@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
+import 'package:sunny_snuggles/features/weather/model/weather_payload.dart';
 import 'package:sunny_snuggles/services/location_service.dart';
 import '../../../core/env.dart';
 import '../model/weather_bundle.dart';
@@ -60,7 +61,87 @@ class WeatherRepository {
   }
 
   // ---------- Public APIs ----------
-  /// Lấy forecast 2 ngày (hôm nay & ngày mai) theo vị trí hiện tại (geolocator + fallback auto:ip)
+  /// Lấy payload tối ưu gửi LLM (2 ngày) theo vị trí hiện tại.
+  /// Payload dùng day[0] (hôm nay) để build theo đúng schema v1.1.
+  Future<Map<String, dynamic>> fetch2DaysPayloadForCurrentLocation() async {
+    try {
+      final c = await _locationService.getLatLon();
+      final q = _buildQFromLatLon(c.lat, c.lon);
+      final map = await _getByQ(
+        '/forecast.json',
+        q: q,
+        extra: {'days': '2', 'aqi': 'no', 'alerts': 'no'},
+      );
+      return WeatherPayloadBuilder(map).buildPayload();
+    } on LocationException catch (e) {
+      if (e.code == 'service_disabled' ||
+          e.code == 'denied' ||
+          e.code == 'denied_forever') {
+        // Fallback: auto:ip
+        final map = await _getByQ(
+          '/forecast.json',
+          q: 'auto:ip',
+          extra: {'days': '2', 'aqi': 'no', 'alerts': 'no'},
+        );
+        return WeatherPayloadBuilder(map).buildPayload();
+      }
+      rethrow;
+    }
+  }
+
+  /// Lấy payload tối ưu gửi LLM theo lat/lon (ví dụ cho "random location feed").
+  Future<Map<String, dynamic>> fetch2DaysPayloadByLatLon({
+    required double lat,
+    required double lon,
+    int days = 2,
+    bool aqi = false,
+    bool alerts = false,
+  }) async {
+    final q = _buildQFromLatLon(lat, lon);
+    final map = await _getByQ(
+      '/forecast.json',
+      q: q,
+      extra: {
+        'days': '$days',
+        'aqi': aqi ? 'yes' : 'no',
+        'alerts': alerts ? 'yes' : 'no',
+      },
+    );
+    return WeatherPayloadBuilder(map).buildPayload();
+  }
+
+  /// (Tuỳ chọn) Lấy cả bundle gốc và payload cùng lúc.
+  /// Dùng khi bạn muốn vừa hiển thị UI chi tiết (bundle) vừa có caption LLM.
+  Future<({WeatherBundle bundle, Map<String, dynamic> payload})>
+  fetch2DaysBundleAndPayloadForCurrentLocation() async {
+    try {
+      final c = await _locationService.getLatLon();
+      final q = _buildQFromLatLon(c.lat, c.lon);
+      final map = await _getByQ(
+        '/forecast.json',
+        q: q,
+        extra: {'days': '2', 'aqi': 'no', 'alerts': 'no'},
+      );
+      final bundle = WeatherBundle.fromForecastJson(map);
+      final payload = WeatherPayloadBuilder(map).buildPayload();
+      return (bundle: bundle, payload: payload);
+    } on LocationException catch (e) {
+      if (e.code == 'service_disabled' ||
+          e.code == 'denied' ||
+          e.code == 'denied_forever') {
+        final map = await _getByQ(
+          '/forecast.json',
+          q: 'auto:ip',
+          extra: {'days': '2', 'aqi': 'no', 'alerts': 'no'},
+        );
+        final bundle = WeatherBundle.fromForecastJson(map);
+        final payload = WeatherPayloadBuilder(map).buildPayload();
+        return (bundle: bundle, payload: payload);
+      }
+      rethrow;
+    }
+  }
+
   Future<WeatherBundle> fetch2DaysForecastForCurrentLocation() async {
     try {
       final c = await _locationService.getLatLon();
@@ -75,7 +156,7 @@ class WeatherRepository {
       if (e.code == 'service_disabled' ||
           e.code == 'denied' ||
           e.code == 'denied_forever') {
-        // Fallback KISS: vẫn trả được dữ liệu
+        // Fallback: auto:ip
         final map = await _getByQ(
           '/forecast.json',
           q: 'auto:ip',
