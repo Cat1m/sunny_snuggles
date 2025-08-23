@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:sunny_snuggles/core/app_theme.dart';
 import 'core/env.dart';
 import 'ui/pages/home_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // tắt fetch qua mạng + cache, dùng font bundle
-  GoogleFonts.config.allowRuntimeFetching = false;
 
   // Cảnh báo sớm nếu chưa truyền API key
   assert(
