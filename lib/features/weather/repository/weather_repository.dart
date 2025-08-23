@@ -168,5 +168,46 @@ class WeatherRepository {
     }
   }
 
+  /// JSON forecast hôm nay (days=1) theo vị trí hiện tại.
+  Future<Map<String, dynamic>>
+  fetchTodayForecastJsonForCurrentLocation() async {
+    try {
+      final c = await _locationService.getLatLon();
+      final q = _buildQFromLatLon(c.lat, c.lon);
+      return _getByQ(
+        '/forecast.json',
+        q: q,
+        extra: {'days': '1', 'aqi': 'no', 'alerts': 'no'},
+      );
+    } on LocationException catch (e) {
+      if (e.code == 'service_disabled' ||
+          e.code == 'denied' ||
+          e.code == 'denied_forever') {
+        // Fallback: auto:ip
+        return _getByQ(
+          '/forecast.json',
+          q: 'auto:ip',
+          extra: {'days': '1', 'aqi': 'no', 'alerts': 'no'},
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Payload v1.1 cho LLM (từ JSON forecast hôm nay).
+  Future<Map<String, dynamic>> fetchTodayPayloadForCurrentLocation() async {
+    final map = await fetchTodayForecastJsonForCurrentLocation();
+    return WeatherPayloadBuilder(map).buildPayload();
+  }
+
+  /// (Optional) Lấy cả bundle + payload hôm nay một lượt.
+  Future<({WeatherBundle bundle, Map<String, dynamic> payload})>
+  fetchTodayBundleAndPayloadForCurrentLocation() async {
+    final map = await fetchTodayForecastJsonForCurrentLocation();
+    final bundle = WeatherBundle.fromForecastJson(map);
+    final payload = WeatherPayloadBuilder(map).buildPayload();
+    return (bundle: bundle, payload: payload);
+  }
+
   void dispose() {}
 }

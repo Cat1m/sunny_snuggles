@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:sunny_snuggles/features/game/viewmodel/streak_provider.dart';
+import 'package:sunny_snuggles/features/weather/llm/analyst_provider.dart';
 import 'package:sunny_snuggles/features/weather/model/weather_bundle.dart';
 import 'package:sunny_snuggles/features/weather/viewmodel/weather_provider.dart';
 import 'package:sunny_snuggles/ui/pages/cute_header.dart';
@@ -113,6 +114,7 @@ class HomePage extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    _FadeSlideIn(delayMs: 90, child: _AnalystCard()),
 
                     const SizedBox(height: 8),
                     // Bottom actions (animate)
@@ -632,6 +634,146 @@ Gradient _tempGradient(int t) {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [Color(0xFFFF8A00), Color(0xFFFF3D3D)], // orange → red
+    );
+  }
+}
+
+class _AnalystCard extends ConsumerWidget {
+  const _AnalystCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(weatherAnalystTodayProvider);
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: async.when(
+        loading: () => const _GlassCard(
+          child: Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2.4),
+              ),
+              SizedBox(width: 12),
+              Expanded(child: _ShimmerLine()),
+            ],
+          ),
+        ),
+        error: (e, st) => _GlassCard(
+          child: Row(
+            children: [
+              const Icon(Icons.tips_and_updates, size: 18),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Không tạo được phân tích. Thử lại nhé!',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Thử lại',
+                onPressed: () => ref.refresh(weatherAnalystTodayProvider),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+        ),
+        data: (text) => _GlassCard(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.tips_and_updates, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text.isEmpty ? 'Không có phân tích phù hợp.' : text,
+                  style: const TextStyle(height: 1.3, fontSize: 14.5),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Làm mới phân tích',
+                onPressed: () => ref.refresh(weatherAnalystTodayProvider),
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassCard extends StatelessWidget {
+  const _GlassCard({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.35),
+                width: 1,
+              ),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShimmerLine extends StatefulWidget {
+  const _ShimmerLine();
+  @override
+  State<_ShimmerLine> createState() => _ShimmerLineState();
+}
+
+class _ShimmerLineState extends State<_ShimmerLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ac;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ac = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ac, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ac.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
+        height: 16,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.30),
+          borderRadius: BorderRadius.circular(6),
+        ),
+      ),
     );
   }
 }
